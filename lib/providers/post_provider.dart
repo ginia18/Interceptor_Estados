@@ -17,25 +17,49 @@ class PostProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   Future<void> fetchPosts() async {
-    _state = PostState.loading;
-    _errorMessage = null;
-    notifyListeners();
+  print("→ Iniciando fetchPosts()");
+  _state = PostState.loading;
+  _errorMessage = null;
+  _posts = [];
+  notifyListeners();
 
-    try {
-      final data = await _apiService.getPosts();
-      _posts = data.map((json) => Post.fromJson(json)).toList();
+  try {
+    print("  Enviando petición GET /posts");
+    final data = await _apiService.getPosts();
+    print("  Respuesta recibida. Tipo: ${data.runtimeType}");
+    print("  Cantidad de items crudos: ${data.length}");
 
-      _state = _posts.isEmpty ? PostState.empty : PostState.success;
-    } on DioException catch (e) {
-      _state = PostState.error;
-      _errorMessage = _getErrorMessage(e);
-    } catch (e) {
-      _state = PostState.error;
-      _errorMessage = 'Error inesperado: $e';
+    final mapped = data.map((json) {
+      try {
+        return Post.fromJson(json as Map<String, dynamic>);
+      } catch (e) {
+        print("  Error mapeando un post: $e → $json");
+        return Post(id: 0, title: "Error en dato", body: "");
+      }
+    }).toList();
+
+    _posts = mapped;
+    print("  Posts mapeados: ${_posts.length}");
+
+    _state = _posts.isEmpty ? PostState.empty : PostState.success;
+  } on DioException catch (e) {
+    print("  DioException: ${e.type} - ${e.message}");
+    if (e.response != null) {
+      print("  Status: ${e.response?.statusCode}");
+      print("  Datos error: ${e.response?.data}");
     }
-
-    notifyListeners();
+    _state = PostState.error;
+    _errorMessage = _getErrorMessage(e);
+  } catch (e, stack) {
+    print("  Error inesperado: $e");
+    print("  Stack: $stack");
+    _state = PostState.error;
+    _errorMessage = 'Error inesperado: $e';
   }
+
+  notifyListeners();
+  print("→ Finalizó fetchPosts() → estado: $_state, posts: ${_posts.length}");
+}
 
   String _getErrorMessage(DioException e) {
     switch (e.response?.statusCode) {
